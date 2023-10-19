@@ -1,0 +1,189 @@
+---
+title: "Tutorial: Computing WHODAS 2.0 Scores Using R"
+author: "Frederick Thielen"
+theme: default
+format: 
+  html:
+    toc: true
+    df-print: paged
+    code-fold: true
+    code-tools: true
+    code-copy: true
+    code-summary: "Show R code"
+---
+
+```{r setup, include=FALSE}
+# Load necessary library
+library(dplyr)
+library(forcats)
+```
+
+# Introduction
+This tutorial demonstrates how to compute the WHODAS 2.0 (World Health Organization Disability Assessment Schedule 2.0) scores using R. The WHODAS 2.0 is a tool designed to measure disability across six domains of functioning. Although a manual exists detailing how to compute the overall score using SPSS, a similar code for R has not been available until now. In this tutorial, we will go through a custom R function to calculate the WHODAS 2.0 scores.
+
+# Generating Example Data
+First, let's create some example data to work with. We'll generate a synthetic dataset of WHODAS responses, simulating responses from 10 individuals.
+
+```{r}
+# Defining the response levels
+whodas_responses <- fct(c("None", "Mild", "Moderate", "Severe", "Extreme or cannot do", NA))
+
+# Defining the column names corresponding to the WHODAS items
+column_names <- c(
+  "D1_1", "D1_2", "D1_3", "D1_4", "D1_5", "D1_6",
+  "D2_1", "D2_2", "D2_3", "D2_4", "D2_5",
+  "D3_1", "D3_2", "D3_3", "D3_4",
+  "D4_1", "D4_2", "D4_3", "D4_4", "D4_5",
+  "D5_2", "D5_3", "D5_4", "D5_5", "D5_8", "D5_9", "D5_10", "D5_11",
+  "D6_1", "D6_2", "D6_3", "D6_4", "D6_5", "D6_6", "D6_7", "D6_8"
+)
+
+# Generating the data frame
+df_whodas <- data.frame(matrix(ncol = 1 + length(column_names), nrow = 10))
+colnames(df_whodas) <- c("id", column_names)
+
+# Populating the data frame with random responses
+df_whodas <- df_whodas %>%
+  mutate(
+    id = row_number(),
+    across(
+      contains("D", ignore.case = F), ~ sample(
+        x = whodas_responses,
+        size = 10,
+        replace = T)
+      )
+    )
+```
+
+The sample data is presented in Table @tbl-df-example.
+
+```{r}
+#| label: tbl-df-example
+#| tbl-cap: "Sample data for the WHODAS tutorial"
+
+df_whodas
+
+```
+
+
+
+# Recoding and Computing WHODAS Scores
+Now that we have our data, we'll define a function to recode the responses and compute the WHODAS scores. This function takes in the WHODAS data and an optional argument to specify whether to include remunerated work items in the computation.
+
+This function takes two arguments:
+
+1. `dat`: The dataset containing the WHODAS 2.0 responses.
+2. `remunarated_work_items`: A flag (either TRUE or FALSE) indicating whether to include remunerated work items in the computation. The default is FALSE.
+
+The `f_recode_whodas` function performs the following tasks:
+
+- Checks for the presence of required columns in the dataset.
+- Recodes the responses based on specified rules.
+- Computes summary scores for each domain (e.g., `Do1`, `Do2`, etc.).
+- Calculates the overall WHODAS summary score (`st_s32` or `st_s36`), with or without the remunerated work items.
+- Adjusts the domain and overall summary scores by applying weights to normalize the scores to a 100-point scale.
+- Returns the original dataset with additional columns for the domain and overall summary scores.
+
+```{r}
+#| code-fold: show
+f_recode_whodas <- function(dat,
+                            remunarated_work_items = F) {
+  
+  # List of original column names and corresponding new column names
+  col_names <- c(
+    "D1_1", "D1_2", "D1_3", "D1_4", "D1_5", "D1_6",
+    "D2_1", "D2_2", "D2_3", "D2_4", "D2_5",
+    "D3_1", "D3_2", "D3_3", "D3_4",
+    "D4_1", "D4_2", "D4_3", "D4_4", "D4_5",
+    "D5_2", "D5_3", "D5_4", "D5_5", 
+    "D6_1", "D6_2", "D6_3", "D6_4", "D6_5", "D6_6", "D6_7", "D6_8"
+  )
+  
+  # Include additional columns for remunerated work items if specified
+  if (remunarated_work_items) {
+    col_names <- c(col_names, "D5_8", "D5_9", "D5_10", "D5_11")
+  }
+  
+  
+  # Check for the presence of required columns in the input dataset
+  if(length(setdiff(col_names, names(dat))) > 0) stop(cat(
+    "All WHO-DAS D columns need to be present in dat. The following are missing:",
+    setdiff(col_names, names(dat))))
+  
+  # Generate new column names by removing underscores
+  new_col_names <- gsub("_", "", col_names)
+  
+  # Define recode rules for general and specific columns
+  recode_rules_general <- c(0, 1, 2, 3, 4)
+  recode_rules_specific <- c(0, 1, 1, 2, 2)
+  
+  # Iterate over each column to apply recode rules
+  for (i in seq_along(col_names)) {
+    original_col_name <- col_names[i]
+    new_col_name <- new_col_names[i]
+    
+    # Apply specific recode rules for certain columns
+    if (original_col_name %in% c("D1_5", "D1_6", "D2_2", "D2_3", "D3_1", "D3_3", "D3_4", 
+                                 "D4_1", "D4_2", "D4_3", "D4_5", "D5_2", "D5_3", "D5_5", 
+                                 "D5_8", "D6_1", "D6_3", "D6_6", "D6_8")) {
+      dat[[new_col_name]] <- recode_rules_specific[dat[[original_col_name]]]
+    } else {
+      dat[[new_col_name]] <- recode_rules_general[dat[[original_col_name]]]
+    }
+  }
+  
+  # Summary scores of domains (do), where domain 1 is abbreviated as Do1, etc.
+  dat$Do1 <- (dat$D11 + dat$D12 + dat$D13 + dat$D14 + dat$D15 + dat$D16)
+  dat$Do2 <- (dat$D21 + dat$D22 + dat$D23 + dat$D24 + dat$D25)
+  dat$Do3 <- (dat$D31 + dat$D32 + dat$D33 + dat$D34)
+  dat$Do4 <- (dat$D41 + dat$D42 + dat$D43 + dat$D44 + dat$D45)
+  dat$Do51 <- (dat$D52 + dat$D53 + dat$D54 + dat$D55)
+  dat$Do6 <- (dat$D61 + dat$D62 + dat$D63 + dat$D64 + dat$D65 + dat$D66 + 
+                dat$D67 + dat$D68)
+  
+  # WHODAS summary score without remunerated work items
+  dat$st_s32 <- dat$Do1 + dat$Do2 + dat$Do3 + dat$Do4 + dat$Do51 + dat$Do6 
+  
+   # Include remunerated work items if specified
+  if(remunarated_work_items){
+    
+    # Domain summary score for remunerated
+    dat$Do52 <- (dat$D58 + dat$D59 + dat$D510 + dat$D511)
+    
+    # WHODAS summary score without remunerated work items
+    dat$st_s36 <- dat$st_s32 + dat$Do52
+  }
+   
+  # Apply weights to normalize domain and overall summary scores to a 100-point scale
+  dat$Do1 <- dat$Do1 * 100/20
+  dat$Do2 <- dat$Do2 * 100/16
+  dat$Do3 <- dat$Do3 * 100/10
+  dat$Do4 <- dat$Do4 * 100/12
+  dat$Do51 <-dat$Do51 * 100/10
+  dat$Do6 <- dat$Do6 * 100/24
+  dat$st_s32 <-  dat$st_s32 * 100/92
+  
+  if(remunarated_work_items){
+    dat$Do52 <- dat$Do52 * 100/14
+      dat$st_s36 <- dat$st_s36 * 100/106
+  }
+  
+  # Return the dataset with additional summary score columns
+  dat
+}
+```
+
+
+# Running the function
+To execute the function, we can pass the dataset as the `dat` argument. If the dataset includes remunerated work items, set `remunarated_work_items` to `TRUE`. The function will return a new dataset with the computed domain and overall summary scores.
+
+The result is shown in Table @tbl-df-result.
+
+```{r}
+#| label: tbl-df-result
+#| tbl-cap: Results table after appyling function f_recode_whodas
+f_recode_whodas(dat = df_whodas, remunarated_work_items = T)
+```
+
+# Conclusion
+With the `f_recode_whodas` function, calculating WHODAS 2.0 scores in R is now straightforward. We can easily integrate this function into the data analysis workflow to compute disability scores.
