@@ -1,6 +1,7 @@
 ---
 title: "Tutorial: Computing WHODAS 2.0 Scores Using R"
 author: "Frederick Thielen"
+date: "2023-10-23"
 theme: default
 format: 
   html:
@@ -19,7 +20,7 @@ library(forcats)
 ```
 
 # Introduction
-This tutorial demonstrates how to compute the WHODAS 2.0 (World Health Organization Disability Assessment Schedule 2.0) scores using R. The WHODAS 2.0 is a tool designed to measure disability across six domains of functioning. Although a manual exists detailing how to compute the overall score using SPSS, a similar code for R has not been available until now. In this tutorial, we will go through a custom R function to calculate the WHODAS 2.0 scores.
+This tutorial demonstrates how to compute the WHODAS 2.0 (World Health Organization Disability Assessment Schedule 2.0) scores using R. The WHODAS 2.0 is a tool designed to measure disability across six domains of functioning. Although a manual exists detailing how to compute the overall score using SPSS (see [Measuring Health and Disability. Manual for WHO Disability Assessment Schedule WHPDAS 2.0](https://iris.who.int/bitstream/handle/10665/43974/9789241547598_eng.pdf?sequence=1]), a similar code for R has not been available until now. In this tutorial, we will go through a custom R function to calculate the WHODAS 2.0 scores.
 
 # Generating Example Data
 First, let's create some example data to work with. We'll generate a synthetic dataset of WHODAS responses, simulating responses from 10 individuals.

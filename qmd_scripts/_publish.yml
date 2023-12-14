@@ -1,0 +1,4 @@
+- source: recode_whodas.qmd
+  quarto-pub:
+    - id: bd69eef0-b6ba-4619-a845-6f7a1ba3dc66
+      url: 'https://fthielen.quarto.pub/tutorial-computing-whodas-20-scores-using-r'
